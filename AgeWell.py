@@ -9,23 +9,26 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from googletrans import Translator
+import datetime  # Import for date and time functionality
+from kivy.uix.textinput import TextInput  # Import TextInput
+from kivy.clock import Clock  # Use Kivy's Clock for scheduling instead of threading
+import time 
 
 class SeniorApp(App):
     def build(self):
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        """Build and store the main layout."""
+        self.main_layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
 
         # Title
         title = Label(
-            text="Senior Friendly App",
+            text="AgeWell App",
             font_size="40sp",
             size_hint=(1, 0.2)
         )
-        layout.add_widget(title)
+        self.main_layout.add_widget(title)
 
-        # ScrollView to allow scrolling of buttons
+        # ScrollView for buttons
         scroll_view = ScrollView(size_hint=(1, 0.8))
-
-        # Vertical layout for apps inside the ScrollView
         apps_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None)
         apps_layout.bind(minimum_height=apps_layout.setter('height'))
 
@@ -33,6 +36,7 @@ class SeniorApp(App):
             ("Phone", self.open_phone),
             ("WhatsApp", self.open_whatsapp),
             ("Messages", self.open_messages),
+            ("Medicine Reminder", self.medicine_reminder),
             ("Photos", self.open_photos),
             ("Weather", self.open_weather),
             ("Calendar", self.open_calendar),
@@ -40,7 +44,7 @@ class SeniorApp(App):
             ("Music", self.open_music),
             ("Settings", self.open_settings),
             ("PhonePay", self.open_phonepay),
-            ("Kannada Translator", self.voice_command)  # New button for voice commands
+            ("Kannada Translator", self.voice_command)
         ]
 
         for name, func in apps:
@@ -48,14 +52,13 @@ class SeniorApp(App):
                 text=name,
                 font_size="20sp",
                 size_hint=(1, None),
-                height=100,  # Set height for large, touch-friendly buttons
+                height=100,
                 on_press=func
             )
             apps_layout.add_widget(button)
 
         scroll_view.add_widget(apps_layout)
-
-        layout.add_widget(scroll_view)
+        self.main_layout.add_widget(scroll_view)
 
         # Emergency Button
         emergency_button = Button(
@@ -65,9 +68,15 @@ class SeniorApp(App):
             size_hint=(1, 0.2),
             on_press=self.emergency_action
         )
-        layout.add_widget(emergency_button)
+        self.main_layout.add_widget(emergency_button)
 
-        return layout
+        return self.main_layout
+
+    def go_back_to_main(self, instance):
+        """Navigate back to the main layout."""
+        self.root.clear_widgets()  # Remove current layout
+        self.root.add_widget(self.main_layout)  # Re-add the stored main layout
+
 
     def init_tts(self):
         """Initialize text-to-speech engine."""
@@ -80,14 +89,108 @@ class SeniorApp(App):
         self.engine.say(text)
         self.engine.runAndWait()
 
+    # Medicine Reminder Feature
+    def medicine_reminder(self, instance):
+        """Open a window to set multiple medicine reminders."""
+        self.reminder_layout = BoxLayout(orientation='vertical', padding=20, spacing=20)
+
+        title = Label(text="Set Medicine Reminders", font_size="30sp", size_hint=(1, 0.2))
+        self.reminder_layout.add_widget(title)
+
+        # Input for time and medicine name
+        self.medicine_inputs = []
+
+        def add_medicine_input():
+            """Add inputs for medicine and time."""
+            input_layout = BoxLayout(orientation='horizontal', size_hint=(1, None), height=50)
+
+            time_input = TextInput(hint_text="Time (HH:MM)", size_hint=(0.4, 1))
+            medicine_input = TextInput(hint_text="Medicine Name", size_hint=(0.6, 1))
+
+            input_layout.add_widget(time_input)
+            input_layout.add_widget(medicine_input)
+
+            self.reminder_layout.add_widget(input_layout, len(self.reminder_layout.children) - 2)
+            self.medicine_inputs.append((time_input, medicine_input))
+
+        # Add initial inputs
+        add_medicine_input()
+
+        # Add Medicine Button
+        add_button = Button(
+            text="Add Another Medicine",
+            font_size="20sp",
+            size_hint=(1, 0.2),
+            on_press=lambda _: add_medicine_input()
+        )
+        self.reminder_layout.add_widget(add_button)
+
+        # Set Reminder Button
+        set_button = Button(
+            text="Set Reminders",
+            font_size="20sp",
+            size_hint=(1, 0.2),
+            on_press=self.set_alarms
+        )
+        self.reminder_layout.add_widget(set_button)
+
+        # Back Button to return to main layout
+        back_button = Button(
+            text="Back",
+            font_size="20sp",
+            size_hint=(1, 0.2),
+            on_press=self.go_back_to_main
+        )
+        self.reminder_layout.add_widget(back_button)
+
+        # Replace the main app layout with the reminder layout
+        self.root.clear_widgets()
+        self.root.add_widget(self.reminder_layout)
+
+    def set_alarms(self, instance):
+        """Set alarms for multiple medicines."""
+        now = datetime.datetime.now()
+        for time_input, medicine_input in self.medicine_inputs:
+            alarm_time = time_input.text
+            medicine_name = medicine_input.text.strip()
+
+            if not alarm_time or not medicine_name:
+                continue  # Skip incomplete entries
+
+            try:
+                # Validate and parse time
+                alarm_hour, alarm_minute = map(int, alarm_time.split(":"))
+                alarm_datetime = now.replace(hour=alarm_hour, minute=alarm_minute, second=0, microsecond=0)
+
+                if alarm_datetime < now:
+                    alarm_datetime += datetime.timedelta(days=1)
+
+                # Schedule the alarm
+                delay = (alarm_datetime - now).total_seconds()
+                threading.Timer(delay, self.trigger_alarm, [medicine_name]).start()
+
+                print(f"Reminder set for {medicine_name} at {alarm_time}.")
+            except Exception as e:
+                print(f"Invalid time format for {medicine_name}: {str(e)}")
+
+        self.speak("All reminders have been set.")
+        self.go_back_to_main(None)
+
+    def trigger_alarm(self, medicine_name):
+        """Trigger the alarm and notify the user."""
+        self.speak(f"It's time to take your medicine: {medicine_name}")
+        print(f"Alarm Triggered! Take your medicine: {medicine_name}")
+
     # Placeholder functions for each app
     def open_phone(self, instance):
         self.speak("Opening Phone...")
         self.launch_app("Phone")
+        self.listen_for_contact()
 
     def open_whatsapp(self, instance):
         self.speak("Opening WhatsApp...")
         self.launch_app("WhatsApp")
+        self.listen_for_contact_and_message()
 
     def open_messages(self, instance):
         self.speak("Opening Messages...")
@@ -102,15 +205,20 @@ class SeniorApp(App):
         self.launch_app("Weather")
 
     def open_calendar(self, instance):
-        self.speak("Opening Calendar...")
-        self.launch_app("Calendar")
+        """Announce the current date, day, and time."""
+        now = datetime.datetime.now()
+        date = now.strftime("%A, %d %B %Y")  # Example: Friday, 16 November 2024
+        time = now.strftime("%I:%M %p")  # Example: 02:30 PM
+        announcement = f"Today is {date}. The time is {time}."
+        print(announcement)  # For debugging
+        self.speak(announcement)
 
     def open_camera(self, instance):
         self.speak("Opening Camera...")
         self.launch_app("Camera")
 
     def open_music(self, instance):
-        self.speak("Opening Music...")
+        self.speak("Opening Music...\nPlaying Music")
         self.launch_app("Music")
 
     def open_settings(self, instance):
@@ -130,7 +238,7 @@ class SeniorApp(App):
                 elif app_name == "WhatsApp":
                     subprocess.call(["open", "whatsapp://"])  # Example: open WhatsApp
                 # Add more app launchers as needed
-                print(f"Opening {app_name }...")
+                print(f"Opening {app_name}...")
             except Exception as e:
                 print(f"Failed to open {app_name}: {str(e)}")
         elif os.name == 'nt':  # For Windows
@@ -160,6 +268,21 @@ class SeniorApp(App):
         self.speak(f"Calling emergency contact: {emergency_contact}")
         # Add actual call functionality using an API or system command if applicable
 
+    def listen_for_contact(self):
+        """Listen for contact and call the contact"""
+        recognizer = sr.Recognizer()
+        with sr.Microphone() as source:
+            print("Listening for the contact name...")
+            audio = recognizer.listen(source)
+
+        try:
+            contact_name = recognizer.recognize_google(audio)
+            print(f"Calling {contact_name}...")  # Simulate calling the contact
+        except sr.UnknownValueError:
+            print("Sorry, I could not understand the audio.")
+        except sr.RequestError as e:
+            print(f"Could not request results from Google Speech Recognition service; {e}")
+
     def listen_for_contact_and_message(self):
         """Listen for a contact name and a message to send."""
         recognizer = sr.Recognizer()
@@ -173,7 +296,6 @@ class SeniorApp(App):
             self.listen_for_message(contact_name)  # Proceed to listen for the message
         except sr.UnknownValueError:
             print("Sorry, I could not understand the audio.")
-            return
         except sr.RequestError as e:
             print(f"Could not request results from Google Speech Recognition service; {e}")
 
