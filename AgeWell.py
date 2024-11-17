@@ -12,7 +12,9 @@ from googletrans import Translator
 import datetime  # Import for date and time functionality
 from kivy.uix.textinput import TextInput  # Import TextInput
 from kivy.clock import Clock  # Use Kivy's Clock for scheduling instead of threading
-import time 
+import threading
+import random  # For simulated testing on non-mobile devices
+from plyer import accelerometer
 
 class SeniorApp(App):
     def build(self):
@@ -21,7 +23,7 @@ class SeniorApp(App):
 
         # Title
         title = Label(
-            text="AgeWell App",
+            text="Senior Friendly App",
             font_size="40sp",
             size_hint=(1, 0.2)
         )
@@ -76,7 +78,6 @@ class SeniorApp(App):
         """Navigate back to the main layout."""
         self.root.clear_widgets()  # Remove current layout
         self.root.add_widget(self.main_layout)  # Re-add the stored main layout
-
 
     def init_tts(self):
         """Initialize text-to-speech engine."""
@@ -240,7 +241,7 @@ class SeniorApp(App):
                 # Add more app launchers as needed
                 print(f"Opening {app_name}...")
             except Exception as e:
-                print(f"Failed to open {app_name}: {str(e)}")
+                print(f"Failed to open {app_name }: {str(e)}")
         elif os.name == 'nt':  # For Windows
             print(f"Attempting to open {app_name}...")
 
@@ -249,6 +250,7 @@ class SeniorApp(App):
         self.speak("Emergency Action Triggered!")
         self.send_location_to_contact()
         self.call_emergency_contact()
+        self.monitor_fall_detection()  # Start monitoring for falls
 
     def send_location_to_contact(self):
         """Simulate sending location via geopy or a real GPS system."""
@@ -267,6 +269,57 @@ class SeniorApp(App):
         print(f"Calling emergency contact: {emergency_contact}")
         self.speak(f"Calling emergency contact: {emergency_contact}")
         # Add actual call functionality using an API or system command if applicable
+
+    def monitor_fall_detection(self):
+        """Monitor accelerometer data for fall detection."""
+        try:
+            accelerometer.enable()  # Enable accelerometer
+            Clock.schedule_interval(self.check_fall, 0.5)  # Check every 0.5 seconds
+        except NotImplementedError:
+            print("Accelerometer not supported on this device.")
+            self.speak("Fall detection not supported on your device.")
+            self.simulate_fall_detection()  # Simulated testing for PCs
+
+    def check_fall(self, dt):
+        """Analyze accelerometer data to detect a fall."""
+        try:
+            # Use accelerometer on mobile devices
+            acceleration = accelerometer.acceleration
+            if acceleration is None:
+                print("No accelerometer data available.")
+                return
+            
+            x, y, z = acceleration
+            magnitude = (x**2 + y**2 + z**2)**0.5  # Calculate magnitude of acceleration
+            print(f"Acceleration magnitude: {magnitude:.2f}")  # Debug output
+
+            # Threshold for fall detection
+            if magnitude < 2.0 or magnitude > 20.0:
+                print("Fall detected!")
+                self.speak("Fall detected! Initiating emergency procedures.")
+                self.call_emergency_contact()  # Call emergency contact on fall detection
+        except Exception as e:
+            print(f"Error reading accelerometer data: {e}")
+
+    def simulate_fall_detection(self):
+        """Simulate fall detection for testing on non-mobile devices."""
+        print("Simulating fall detection on non-mobile device.")
+        Clock.schedule_interval(self.simulated_fall_check, 2.0)
+
+    def simulated_fall_check(self, dt):
+        """Simulate random acceleration data for fall detection testing."""
+        acceleration = (
+            random.uniform(-10, 10),
+            random.uniform(-10, 10),
+            random.uniform(-10, 10),
+        )
+        print(f"Simulated acceleration: {acceleration}")
+        x, y, z = acceleration
+        magnitude = (x**2 + y**2 + z**2)**0.5
+        if magnitude < 2.0 or magnitude > 20.0:
+            print("Simulated fall detected!")
+            self.speak("Simulated fall detected! Initiating emergency procedures.")
+            self.call_emergency_contact()  # Call emergency contact on simulated fall detection
 
     def listen_for_contact(self):
         """Listen for contact and call the contact"""
@@ -294,7 +347,7 @@ class SeniorApp(App):
             contact_name = recognizer.recognize_google(audio)
             print(f"You said: {contact_name}")
             self.listen_for_message(contact_name)  # Proceed to listen for the message
-        except sr.UnknownValueError:
+        except sr .UnknownValueError:
             print("Sorry, I could not understand the audio.")
         except sr.RequestError as e:
             print(f"Could not request results from Google Speech Recognition service; {e}")
